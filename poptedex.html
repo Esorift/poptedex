@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poptedex - Official Poptemon Tracker</title>
+    
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+    <style>
+        :root { --primary: #ff4757; --dark: #2f3542; --light: #f1f2f6; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--light); margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        header { background: var(--primary); color: white; width: 100%; max-width: 800px; padding: 20px; border-radius: 15px; text-align: center; box-shadow: 0 4px 15px rgba(255, 71, 87, 0.3); margin-bottom: 20px; }
+        .section { background: white; padding: 20px; border-radius: 15px; width: 100%; max-width: 800px; box-sizing: border-box; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        input { padding: 12px; margin: 5px; border: 2px solid #ddd; border-radius: 8px; width: calc(50% - 30px); }
+        button { padding: 12px 24px; background: #2ed573; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        button:hover { opacity: 0.8; transform: translateY(-2px); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; width: 100%; max-width: 800px; }
+        .card { background: white; padding: 15px; border-radius: 15px; text-align: center; border-bottom: 5px solid #dfe4ea; transition: 0.3s; }
+        .card img { width: 120px; height: 120px; object-fit: cover; border-radius: 10px; background: #f9f9f9; }
+        .admin-box { background: var(--dark); color: white; border-top: 5px solid var(--primary); }
+        .pending-item { background: #57606f; padding: 15px; margin: 10px 0; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Poptedex</h1>
+    <p>The Community Poptemon Database</p>
+</header>
+
+<div class="section">
+    <h3>Submit a New Poptemon</h3>
+    <input type="text" id="popName" placeholder="Poptemon Name">
+    <input type="text" id="popImg" placeholder="Image Link (Ends in .jpg or .png)">
+    <button onclick="submitPoptemon()">Submit for Approval</button>
+</div>
+
+<h2 style="color: var(--dark);">Registered Poptemon</h2>
+<div id="publicGrid" class="grid"></div>
+
+<div id="admin-auth" class="section" style="margin-top: 50px; text-align: center;">
+    <h4>Admin Access</h4>
+    <input type="password" id="adminPass" placeholder="Secret Key" style="width: 200px;">
+    <button onclick="checkPassword()" style="background: var(--dark);">Unlock Controls</button>
+</div>
+
+<div id="admin-panel" class="section admin-box hidden">
+    <h2>Admin Dashboard</h2>
+    <div id="pendingList"><p>No pending submissions.</p></div>
+</div>
+
+<script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAq8ZEFYz9TGAQmN0wB-n6mxI4DsZeHol0",
+      authDomain: "poptedex.firebaseapp.com",
+      databaseURL: "https://poptedex-default-rtdb.firebaseio.com",
+      projectId: "poptedex",
+      storageBucket: "poptedex.firebasestorage.app",
+      messagingSenderId: "845489177220",
+      appId: "1:845489177220:web:b5eca86a11d0ab56eeb8d1"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const SECRET_PASSWORD = "Nimit123"; 
+
+    function submitPoptemon() {
+        const name = document.getElementById('popName').value;
+        const img = document.getElementById('popImg').value;
+        if(name && img) {
+            db.ref('pending/').push({ name, img });
+            alert("Sent for approval!");
+            document.getElementById('popName').value = '';
+            document.getElementById('popImg').value = '';
+        }
+    }
+
+    db.ref('approved/').on('value', (snapshot) => {
+        const data = snapshot.val();
+        const grid = document.getElementById('publicGrid');
+        grid.innerHTML = '';
+        if (data) {
+            for (let id in data) {
+                grid.innerHTML += `<div class="card"><img src="${data[id].img}" onerror="this.src='https://placehold.co/120x120?text=Invalid+Link'"><h3>${data[id].name}</h3></div>`;
+            }
+        }
+    });
+
+    function checkPassword() {
+        if(document.getElementById('adminPass').value === SECRET_PASSWORD) {
+            document.getElementById('admin-panel').classList.remove('hidden');
+            document.getElementById('admin-auth').classList.add('hidden');
+            loadAdminQueue();
+        } else { alert("Wrong Password!"); }
+    }
+
+    function loadAdminQueue() {
+        db.ref('pending/').on('value', (snapshot) => {
+            const data = snapshot.val();
+            const list = document.getElementById('pendingList');
+            list.innerHTML = '';
+            if (data) {
+                for (let id in data) {
+                    list.innerHTML += `<div class="pending-item"><span><strong>${data[id].name}</strong></span>
+                    <div><button onclick="approvePop('${id}','${data[id].name}','${data[id].img}')" style="background:#1e90ff; border:none; padding:5px; color:white; border-radius:5px; cursor:pointer;">Approve</button>
+                    <button onclick="rejectPop('${id}')" style="background:#ff4757; border:none; padding:5px; color:white; border-radius:5px; cursor:pointer;">Reject</button></div></div>`;
+                }
+            } else { list.innerHTML = '<p>No pending items.</p>'; }
+        });
+    }
+
+    function approvePop(id, name, img) {
+        db.ref('approved/').push({ name, img });
+        db.ref('pending/' + id).remove();
+    }
+    function rejectPop(id) { db.ref('pending/' + id).remove(); }
+</script>
+</body>
+</html>
